@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="5점 척도 5문항 설문 응답을 입력하면 문항별 평균과 점수 분포를 자동으로 정리합니다.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>설문 결과 집계표</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@700;800&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: 좌측 응답 입력 패널 + 우측 문항별 집계, 아래 응답 원장(표) */
+:root{
+  --bg:#f2f4f8; --surface:#ffffff; --ink:#192033; --muted:#5b6478; --line:#dce1eb;
+  --accent:#2747c9; --accent-ink:#ffffff; --accent-soft:#e7ecfb; --danger:#b8392f;
+  --s1:#c9473d; --s2:#e3904f; --s3:#b8b3a6; --s4:#5f9e7d; --s5:#2b7656;
+  --font-display:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#11141c; --surface:#191d28; --ink:#e7eaf2; --muted:#9aa2b5; --line:#2b3142;
+  --accent:#8ea3ff; --accent-ink:#0f1430; --accent-soft:#222a48; --danger:#ef7a70;
+  --s1:#e0675d; --s2:#eaa16b; --s3:#8b8678; --s4:#75b892; --s5:#4daa80; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#11141c; --surface:#191d28; --ink:#e7eaf2; --muted:#9aa2b5; --line:#2b3142;
+  --accent:#8ea3ff; --accent-ink:#0f1430; --accent-soft:#222a48; --danger:#ef7a70;
+  --s1:#e0675d; --s2:#eaa16b; --s3:#8b8678; --s4:#75b892; --s5:#4daa80; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:24px}
+h1,h2{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-0.01em}
+h1{font-size:clamp(24px,4vw,32px);font-weight:800}
+h2{font-size:18px;font-weight:700}
+.sub{color:var(--muted);margin:6px 0 0}
+.num{font-family:var(--font-data);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;background:var(--accent-soft);border-radius:10px;padding:10px 14px;font-size:14px}
+.banner b{font-weight:600}
+
+.grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:16px;min-width:0}
+
+/* 입력 */
+.entry-q{display:grid;gap:6px}
+.entry-q .lbl{display:flex;gap:8px;font-size:14px;font-weight:500}
+.qno{font-family:var(--font-data);font-size:12px;font-weight:600;color:var(--accent);padding-top:2px;flex:none}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:flex;align-items:center;justify-content:center;height:40px;font-family:var(--font-data);font-weight:600;cursor:pointer;border-left:1px solid var(--line);color:var(--muted);transition:background .12s,color .12s;user-select:none}
+.seg label:first-of-type{border-left:0}
+.seg label:hover{background:var(--accent-soft);color:var(--ink)}
+.seg input:checked + label{background:var(--accent);color:var(--accent-ink)}
+.seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:-3px}
+.entry-q.current .seg{border-color:var(--accent)}
+.legend{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 14px;font-size:14px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;padding:11px 16px}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.link{border:0;background:none;padding:4px 2px;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
+.btn.danger-fill{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.err{color:var(--danger);font-size:13px;margin:0;min-height:1.2em}
+
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;font-size:14px}
+details .inner{display:grid;gap:10px;margin-top:12px}
+textarea,input[type=text]{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{font-family:var(--font-data);min-height:110px;resize:vertical}
+.qedit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}
+
+/* 결과 */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface);padding:12px 14px;min-width:0}
+.stat .k{font-size:12px;color:var(--muted);letter-spacing:.02em}
+.stat .v{font-family:var(--font-data);font-variant-numeric:tabular-nums;font-size:24px;font-weight:600;line-height:1.3}
+.stat .v small{font-size:13px;color:var(--muted);font-weight:500}
+.stat .v.txt{font-family:var(--font-body);font-size:15px;font-weight:600;line-height:1.4;padding-top:4px;overflow-wrap:anywhere}
+
+.qres{display:grid;gap:10px;padding:16px 0;border-top:1px solid var(--line)}
+.qres:first-of-type{border-top:0;padding-top:4px}
+.qres-head{display:flex;align-items:baseline;gap:10px}
+.qres-title{flex:1;min-width:0;font-weight:600}
+.chip{font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:2px;white-space:nowrap}
+.chip.hi{background:color-mix(in srgb,var(--s5) 18%,transparent);color:var(--s5)}
+.chip.lo{background:color-mix(in srgb,var(--s1) 16%,transparent);color:var(--s1)}
+.avg{font-family:var(--font-data);font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;line-height:1}
+.avg small{font-size:13px;color:var(--muted);font-weight:500;margin-left:2px}
+.scale{position:relative;height:30px}
+.track{position:absolute;left:0;right:0;top:6px;height:10px;border-radius:5px;background:var(--bg);border:1px solid var(--line)}
+.fill{position:absolute;left:0;top:6px;height:10px;border-radius:5px;background:var(--accent);transition:width .4s ease}
+.tick{position:absolute;top:19px;font-family:var(--font-data);font-size:11px;color:var(--muted);transform:translateX(-50%)}
+.tick:first-child{transform:none}.tick:last-child{transform:translateX(-100%)}
+.dist{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--bg)}
+.dist span{display:flex;align-items:center;justify-content:center;font-family:var(--font-data);font-size:11px;font-weight:600;color:#fff;min-width:0;overflow:hidden;transition:width .4s ease}
+.meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;color:var(--muted)}
+.key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:0}
+.empty{color:var(--muted);text-align:center;padding:32px 8px}
+
+/* 원장 */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:480px}
+th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
+th{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+td.num,th.num{font-family:var(--font-data);font-variant-numeric:tabular-nums}
+td:first-child,th:first-child{text-align:left}
+td .x{border:0;background:none;color:var(--muted);padding:2px 8px;border-radius:6px}
+td .x:hover{color:var(--danger);background:var(--bg)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100% - 32px)}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="header">
+    <div>
+      <h1>설문 결과 집계표</h1>
+      <p class="sub">5점 척도 · 5개 문항 · 응답을 넣으면 문항별 평균이 바로 갱신됩니다</p>
+    </div>
+    <div class="row">
+      <button class="btn" id="copySummary" type="button">요약 복사</button>
+      <button class="btn" id="copyCsv" type="button">CSV 복사</button>
+    </div>
+  </header>
+
+  <div class="banner" id="sampleBanner" hidden>
+    <span><b>예시 데이터</b>로 채워져 있습니다. 첫 응답을 추가하면 예시는 자동으로 지워집니다.</span>
+    <button class="btn link" id="clearSample" type="button">지금 지우기</button>
+  </div>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="entryTitle">
+      <div>
+        <h2 id="entryTitle">응답 입력</h2>
+        <p class="hint" style="margin-top:4px">키보드 숫자 1–5로 차례대로 고르고 Enter로 추가할 수 있습니다.</p>
+      </div>
+      <form id="entry" autocomplete="off" style="display:grid;gap:14px">
+        <div id="entryQs" style="display:grid;gap:14px"></div>
+        <div class="legend"><span>1 매우 그렇지 않다</span><span>3 보통</span><span>5 매우 그렇다</span></div>
+        <p class="err" id="entryErr" role="alert"></p>
+        <button class="btn primary" type="submit" id="addBtn">응답 추가</button>
+      </form>
+
+      <details>
+        <summary>여러 응답 한꺼번에 붙여넣기</summary>
+        <div class="inner">
+          <p class="hint">한 줄에 응답 1건, 점수 5개를 쉼표·공백·탭으로 구분합니다. 엑셀에서 5개 열을 복사해 붙여넣어도 됩니다.</p>
+          <textarea id="bulk" placeholder="4,5,3,4,2&#10;5 4 4 3 3"></textarea>
+          <p class="err" id="bulkErr" role="alert"></p>
+          <div class="row"><button class="btn" type="button" id="bulkAdd">붙여넣은 응답 추가</button></div>
+        </div>
+      </details>
+
+      <details>
+        <summary>문항 이름 바꾸기</summary>
+        <div class="inner" id="qEdit"></div>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="resTitle">
+      <h2 id="resTitle">문항별 결과</h2>
+      <div class="stats">
+        <div class="stat"><div class="k">응답 수</div><div class="v" id="stN">0</div></div>
+        <div class="stat"><div class="k">전체 평균</div><div class="v" id="stAvg">–</div></div>
+        <div class="stat"><div class="k">가장 높은 문항</div><div class="v txt" id="stHi">–</div></div>
+        <div class="stat"><div class="k">가장 낮은 문항</div><div class="v txt" id="stLo">–</div></div>
+      </div>
+      <div id="results"></div>
+      <div class="key" aria-hidden="true">
+        <span><i style="background:var(--s1)"></i>1점</span><span><i style="background:var(--s2)"></i>2점</span><span><i style="background:var(--s3)"></i>3점</span><span><i style="background:var(--s4)"></i>4점</span><span><i style="background:var(--s5)"></i>5점</span>
+        <span>막대: 점수별 응답 비율</span>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="ledgerTitle">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="ledgerTitle">입력된 응답</h2>
+      <div class="row" id="resetArea">
+        <button class="btn danger" type="button" id="resetBtn">전체 지우기</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr id="ledgerHead"></tr></thead>
+      <tbody id="ledger"></tbody>
+    </table></div>
+    <p class="hint">입력한 응답은 이 브라우저에 저장됩니다. 다른 기기나 다른 사람과는 공유되지 않으니, 보관하려면 CSV 복사로 엑셀에 붙여두세요.</p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  const KEY = 'survey-tally-v1';
+  const DEFAULT_Q = ['전반적으로 회사 생활에 만족한다','업무량과 일정이 적절하다','팀 내 소통이 원활하다','업무에 필요한 지원을 충분히 받는다','이 회사에서 성장하고 있다고 느낀다'];
+  const SAMPLE = [[4,3,4,3,4],[5,4,5,4,4],[3,2,4,3,3],[4,3,3,4,2],[5,4,4,5,4],[4,2,5,3,3],[3,3,4,2,3],[4,3,4,4,4],[2,2,3,3,2],[5,3,5,4,5],[4,4,4,3,3],[4,2,3,4,3]];
+  const COLORS = ['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)'];
+  const $ = id => document.getElementById(id);
+
+  let state;
+  function load(){
+    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && Array.isArray(s.responses) && Array.isArray(s.questions)) return s; } catch(e){}
+    return { questions: DEFAULT_Q.slice(), responses: SAMPLE.map((v,i)=>({id:i+1, v})), nextId: SAMPLE.length+1, sample: true };
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+  state = load();
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt = (x, d=2) => (x==null || isNaN(x)) ? '–' : x.toFixed(d);
+  let toastT;
+  function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+  /* ---------- 입력 폼 ---------- */
+  let current = 0;
+  function buildEntry(){
+    $('entryQs').innerHTML = state.questions.map((q,i)=>`
+      <div class="entry-q" data-i="${i}">
+        <div class="lbl"><span class="qno">Q${i+1}</span><span>${esc(q)}</span></div>
+        <div class="seg" role="radiogroup" aria-label="Q${i+1} ${esc(q)}">
+          ${[1,2,3,4,5].map(n=>`<input type="radio" name="q${i}" id="q${i}v${n}" value="${n}"><label for="q${i}v${n}">${n}</label>`).join('')}
+        </div>
+      </div>`).join('');
+    $('qEdit').innerHTML = state.questions.map((q,i)=>`
+      <div class="qedit"><span class="qno">Q${i+1}</span><input type="text" id="qname${i}" value="${esc(q)}" maxlength="80"></div>`).join('')
+      + `<div class="row"><button class="btn link" type="button" id="qReset">기본 문항으로 되돌리기</button></div>`;
+    state.questions.forEach((_,i)=>{
+      $('qname'+i).addEventListener('change', e=>{
+        state.questions[i] = e.target.value.trim() || `문항 ${i+1}`;
+        save(); buildEntry(); render();
+      });
+    });
+    $('qReset').addEventListener('click', ()=>{ state.questions = DEFAULT_Q.slice(); save(); buildEntry(); render(); toast('기본 문항으로 되돌렸습니다'); });
+    setCurrent(0);
+  }
+  function setCurrent(i){
+    current = Math.max(0, Math.min(4, i));
+    document.querySelectorAll('.entry-q').forEach(el=>el.classList.toggle('current', +el.dataset.i===current));
+  }
+  $('entryQs').addEventListener('change', e=>{
+    const m = e.target.name && e.target.name.match(/^q(\d)$/);
+    if (m){ $('entryErr').textContent=''; const next = firstUnanswered(); setCurrent(next<0 ? +m[1] : next); }
+  });
+  function firstUnanswered(){ for (let i=0;i<5;i++){ if(!document.querySelector(`input[name=q${i}]:checked`)) return i; } return -1; }
+
+  document.addEventListener('keydown', e=>{
+    const tag = (e.target.tagName||'').toLowerCase();
+    if (tag==='textarea' || (tag==='input' && e.target.type==='text')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^[1-5]$/.test(e.key)){
+      const el = $(`q${current}v${e.key}`); if(!el) return;
+      e.preventDefault(); el.checked = true; el.focus({preventScroll:true});
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+      if (current<4 && firstUnanswered()<0) setCurrent(current+1);
+    }
+  });
+
+  function takeRealStart(){
+    if (state.sample){ state.responses = []; state.nextId = 1; state.sample = false; return true; }
+    return false;
+  }
+  $('entry').addEventListener('submit', e=>{
+    e.preventDefault();
+    const v = [0,1,2,3,4].map(i=>{ const c=document.querySelector(`input[name=q${i}]:checked`); return c ? +c.value : null; });
+    const missing = v.map((x,i)=>x==null?`Q${i+1}`:null).filter(Boolean);
+    if (missing.length){ $('entryErr').textContent = `${missing.join(', ')}에 점수를 선택해 주세요.`; setCurrent(firstUnanswered()); return; }
+    const cleared = takeRealStart();
+    const id = state.nextId++;
+    state.responses.push({id, v});
+    save(); render();
+    $('entry').reset(); setCurrent(0);
+    const first = $('q0v1'); if (first) first.focus({preventScroll:true});
+    toast(cleared ? '예시를 지우고 첫 응답을 추가했습니다' : `응답 #${id} 추가됨`);
+  });
+
+  $('bulkAdd').addEventListener('click', ()=>{
+    const lines = $('bulk').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if (!lines.length){ $('bulkErr').textContent='붙여넣은 내용이 없습니다.'; return; }
+    const good=[], bad=[];
+    lines.forEach((ln,idx)=>{
+      const parts = ln.split(/[\s,;]+/).filter(Boolean).map(Number);
+      if (parts.length===5 && parts.every(n=>Number.isInteger(n)&&n>=1&&n<=5)) good.push(parts); else bad.push(idx+1);
+    });
+    if (bad.length){ $('bulkErr').textContent = `${bad.slice(0,8).join(', ')}${bad.length>8?' 외':''}번째 줄을 읽지 못했습니다. 1–5 사이 점수 5개인지 확인해 주세요.`; return; }
+    takeRealStart();
+    good.forEach(v=>state.responses.push({id: state.nextId++, v}));
+    save(); render(); $('bulk').value=''; $('bulkErr').textContent='';
+    toast(`응답 ${good.length}건 추가됨`);
+  });
+
+  /* ---------- 집계 ---------- */
+  function stats(){
+    const R = state.responses, n = R.length;
+    return state.questions.map((q,i)=>{
+      const vals = R.map(r=>r.v[i]);
+      const counts = [0,0,0,0,0]; vals.forEach(x=>counts[x-1]++);
+      const avg = n ? vals.reduce((a,b)=>a+b,0)/n : null;
+      const sd = n>1 ? Math.sqrt(vals.reduce((a,b)=>a+(b-avg)**2,0)/(n-1)) : null;
+      const top2 = n ? (counts[3]+counts[4])/n : null;
+      return {q, i, n, avg, sd, counts, top2};
+    });
+  }
+
+  function render(){
+    const S = stats(), n = state.responses.length;
+    $('sampleBanner').hidden = !(state.sample && n);
+    $('stN').innerHTML = `${n}<small> 건</small>`;
+    if (!n){
+      $('stAvg').textContent='–'; $('stHi').textContent='–'; $('stLo').textContent='–';
+      $('results').innerHTML = `<div class="empty">아직 응답이 없습니다. 왼쪽에서 첫 응답을 입력해 보세요.</div>`;
+    } else {
+      const overall = S.reduce((a,s)=>a+s.avg,0)/S.length;
+      const max = Math.max(...S.map(s=>s.avg)), min = Math.min(...S.map(s=>s.avg));
+      const distinct = max - min > 1e-9;
+      const his = S.filter(s=>Math.abs(s.avg-max)<1e-9), los = S.filter(s=>Math.abs(s.avg-min)<1e-9);
+      $('stAvg').innerHTML = `${fmt(overall)}<small> / 5</small>`;
+      $('stHi').textContent = distinct ? `${his.map(s=>'Q'+(s.i+1)).join(', ')} · ${fmt(max)}` : '차이 없음';
+      $('stLo').textContent = distinct ? `${los.map(s=>'Q'+(s.i+1)).join(', ')} · ${fmt(min)}` : '차이 없음';
+      $('results').innerHTML = S.map(s=>{
+        const chip = !distinct ? '' : Math.abs(s.avg-max)<1e-9 ? '<span class="chip hi">최고</span>' : Math.abs(s.avg-min)<1e-9 ? '<span class="chip lo">최저</span>' : '';
+        const pct = ((s.avg-1)/4*100).toFixed(2);
+        const segs = s.counts.map((c,k)=>{
+          const w = c/s.n*100;
+          return `<span style="width:${w}%;background:${COLORS[k]}" title="${k+1}점: ${c}명 (${Math.round(w)}%)">${w>=9?c:''}</span>`;
+        }).join('');
+        return `<article class="qres">
+          <div class="qres-head">
+            <span class="qno">Q${s.i+1}</span>
+            <span class="qres-title">${esc(s.q)}${chip}</span>
+            <span class="avg">${fmt(s.avg)}<small>/5</small></span>
+          </div>
+          <div class="scale" aria-hidden="true">
+            <div class="track"></div><div class="fill" style="width:${pct}%"></div>
+            ${[1,2,3,4,5].map(t=>`<span class="tick" style="left:${(t-1)*25}%">${t}</span>`).join('')}
+          </div>
+          <div class="dist" role="img" aria-label="${s.counts.map((c,k)=>`${k+1}점 ${c}명`).join(', ')}">${segs}</div>
+          <div class="meta"><span>긍정(4–5점) <b class="num">${Math.round(s.top2*100)}%</b></span><span>표준편차 <span class="num">${fmt(s.sd)}</span></span><span>응답 <span class="num">${s.n}</span>건</span></div>
+        </article>`;
+      }).join('');
+    }
+    // 원장
+    $('ledgerHead').innerHTML = `<th class="num">#</th>${state.questions.map((q,i)=>`<th class="num" title="${esc(q)}">Q${i+1}</th>`).join('')}<th class="num">평균</th><th><span style="position:absolute;left:-9999px">삭제</span></th>`;
+    $('ledger').innerHTML = n ? state.responses.slice().reverse().map(r=>`
+      <tr><td class="num">${r.id}</td>${r.v.map(x=>`<td class="num">${x}</td>`).join('')}
+      <td class="num">${fmt(r.v.reduce((a,b)=>a+b,0)/5,1)}</td>
+      <td><button class="x" type="button" data-del="${r.id}" aria-label="응답 ${r.id} 삭제">삭제</button></td></tr>`).join('')
+      : `<tr><td colspan="8" class="empty">입력된 응답이 없습니다.</td></tr>`;
+  }
+
+  $('ledger').addEventListener('click', e=>{
+    const b = e.target.closest('[data-del]'); if(!b) return;
+    const id = +b.dataset.del;
+    state.responses = state.responses.filter(r=>r.id!==id);
+    save(); render(); toast(`응답 #${id} 삭제됨`);
+  });
+  $('clearSample').addEventListener('click', ()=>{ takeRealStart(); save(); render(); toast('예시 데이터를 지웠습니다'); });
+
+  // 전체 지우기 (페이지 안에서 확인)
+  function resetIdle(){
+    $('resetArea').innerHTML = `<button class="btn danger" type="button" id="resetBtn">전체 지우기</button>`;
+    $('resetBtn').addEventListener('click', resetAsk);
+  }
+  function resetAsk(){
+    $('resetArea').innerHTML = `<span style="font-size:14px">응답 ${state.responses.length}건을 모두 지울까요?</span>
+      <button class="btn danger-fill" type="button" id="resetYes">지우기</button><button class="btn" type="button" id="resetNo">취소</button>`;
+    $('resetYes').addEventListener('click', ()=>{ state.responses=[]; state.nextId=1; state.sample=false; save(); render(); resetIdle(); toast('모든 응답을 지웠습니다'); });
+    $('resetNo').addEventListener('click', resetIdle);
+    $('resetNo').focus();
+  }
+  $('resetBtn').addEventListener('click', resetAsk);
+
+  // 복사
+  async function copy(text, okMsg){
+    try { await navigator.clipboard.writeText(text); toast(okMsg); }
+    catch(e){
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      let ok=false; try { ok = document.execCommand('copy'); } catch(_){}
+      ta.remove(); toast(ok ? okMsg : '복사하지 못했습니다. 다시 시도해 주세요.');
+    }
+  }
+  $('copySummary').addEventListener('click', ()=>{
+    const S = stats(), n = state.responses.length;
+    if (!n){ toast('요약할 응답이 없습니다'); return; }
+    const overall = S.reduce((a,s)=>a+s.avg,0)/S.length;
+    const lines = [`설문 결과 요약 (응답 ${n}건, 5점 척도)`, `전체 평균 ${fmt(overall)}`, '']
+      .concat(S.map(s=>`Q${s.i+1}. ${s.q} — 평균 ${fmt(s.avg)} / 긍정 ${Math.round(s.top2*100)}%`));
+    copy(lines.join('\n'), '요약을 복사했습니다');
+  });
+  $('copyCsv').addEventListener('click', ()=>{
+    if (!state.responses.length){ toast('복사할 응답이 없습니다'); return; }
+    const head = ['번호'].concat(state.questions.map((q,i)=>`Q${i+1} ${q}`)).map(h=>`"${h.replace(/"/g,'""')}"`).join(',');
+    const rows = state.responses.map(r=>[r.id].concat(r.v).join(','));
+    copy([head].concat(rows).join('\n'), 'CSV를 복사했습니다. 엑셀에 붙여넣으세요');
+  });
+
+  buildEntry(); render();
+})();
+</script>
+</body>
+</html>
